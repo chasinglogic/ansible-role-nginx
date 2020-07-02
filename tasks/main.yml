@@ -1,0 +1,51 @@
+---
+- name: Install NGINX
+  become: true
+  become_user: root
+  package:
+    name: nginx
+
+- name: Ensure NGINX user exists
+  become: true
+  become_user: root
+  user:
+    name: "{{ nginx_user }}"
+
+- name: RedHat | Set HTTPD can connect to allow proxy passing
+  become: true
+  become_user: root
+  seboolean:
+    name: httpd_can_network_connect
+    state: true
+    persistent: true
+  when: ansible_os_family == "RedHat"
+
+- name: Upload minimum nginx.conf
+  become: true
+  become_user: root
+  template:
+    src: nginx.conf
+    dest: /etc/nginx/nginx.conf
+
+- name: Ensure /etc/nginx/conf.d exists
+  become: true
+  become_user: root
+  file:
+    state: directory
+    name: /etc/nginx/conf.d
+
+- name: Add configuration files for vhosts
+  become: true
+  become_user: root
+  template:
+    src: "{{ item }}.conf"
+    dest: /etc/nginx/conf.d/{{ item }}.conf
+  with_items: "{{ vhosts }}"
+  when: vhosts is defined
+  register: nginx_config
+
+- name: Ensure NGINX is enabled and started
+  systemd:
+    name: nginx
+    state: "{{ 'restarted' if nginx_config.changed else 'started' }}"
+    enabled: true
